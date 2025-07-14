@@ -3,6 +3,129 @@
 ## Problem Description
 Camera toggle button doesn't properly turn off the device camera when the off button is pressed.
 
+## Your Specific OpenVidu Fix
+
+**Issue**: The camera disabling logic is commented out and the toggle only handles enabling webcam in specific scenarios.
+
+**Problems in your current code**:
+1. Disabling webcam logic is commented out (`TODO TO BE USED LATER`)
+2. Only handles enabling when `isOnlyScreenConnected()`
+3. Doesn't handle turning off webcam when only webcam is active
+4. Missing proper cleanup of webcam publisher/stream
+
+**Fixed Code**:
+
+```typescript
+async toggleCam() {
+    this.commonsService.toggleCam = this.localUsersService.hasWebcamVideoActive();
+    const publishVideo = !this.localUsersService.hasWebcamVideoActive();
+    const isCurrentlyActive = this.localUsersService.hasWebcamVideoActive();
+    
+    if (isCurrentlyActive) {
+        // DISABLING/TURNING OFF WEBCAM
+        if (this.localUsersService.areBothConnected()) {
+            // Both screen and webcam are active - turn off webcam only
+            this.openViduWebRTCService.publishWebcamVideo(false);
+            this.localUsersService.disableWebcamUser();
+            // Optionally unpublish the webcam publisher completely
+            this.openViduWebRTCService.unpublishWebcamPublisher();
+        } else if (this.localUsersService.isOnlyWebcamConnected()) {
+            // Only webcam is active - turn it off completely
+            this.openViduWebRTCService.publishWebcamVideo(false);
+            this.localUsersService.disableWebcamUser();
+            this.openViduWebRTCService.unpublishWebcamPublisher();
+            // Optionally disconnect webcam session if no screen sharing
+            // await this.openViduWebRTCService.disconnectWebcamSession();
+        } else {
+            // Only screen is connected, but webcam was somehow active - turn off webcam
+            this.openViduWebRTCService.publishWebcamVideo(false);
+        }
+    } else {
+        // ENABLING/TURNING ON WEBCAM
+        if (this.localUsersService.isOnlyScreenConnected()) {
+            const hasAudio = this.localUsersService.hasScreenAudioActive();
+
+            if (!this.openViduWebRTCService.isWebcamSessionConnected()) {
+                await this.connectWebcamSession();
+            }
+            await this.openViduWebRTCService.publishWebcamPublisher(this.ovSettings.getRoleType());
+            this.openViduWebRTCService.publishScreenAudio(false);
+            this.openViduWebRTCService.publishWebcamAudio(hasAudio);
+            this.localUsersService.enableWebcamUser();
+        } else {
+            // No connections or only webcam - enable webcam
+            if (!this.openViduWebRTCService.isWebcamSessionConnected()) {
+                await this.connectWebcamSession();
+            }
+            await this.openViduWebRTCService.publishWebcamPublisher(this.ovSettings.getRoleType());
+            this.localUsersService.enableWebcamUser();
+        }
+        
+        // Always publish video when enabling
+        this.openViduWebRTCService.publishWebcamVideo(true);
+    }
+}
+```
+
+**Alternative Simpler Fix** (if you want to keep it minimal):
+
+```typescript
+async toggleCam() {
+    this.commonsService.toggleCam = this.localUsersService.hasWebcamVideoActive();
+    const isCurrentlyActive = this.localUsersService.hasWebcamVideoActive();
+    const publishVideo = !isCurrentlyActive;
+    
+    if (isCurrentlyActive) {
+        // TURN OFF CAMERA
+        this.openViduWebRTCService.publishWebcamVideo(false);
+        this.localUsersService.disableWebcamUser();
+        
+        // Properly cleanup webcam publisher
+        if (this.localUsersService.isOnlyWebcamConnected()) {
+            this.openViduWebRTCService.unpublishWebcamPublisher();
+        }
+    } else {
+        // TURN ON CAMERA
+        if (this.localUsersService.isOnlyScreenConnected()) {
+            const hasAudio = this.localUsersService.hasScreenAudioActive();
+
+            if (!this.openViduWebRTCService.isWebcamSessionConnected()) {
+                await this.connectWebcamSession();
+            }
+            await this.openViduWebRTCService.publishWebcamPublisher(this.ovSettings.getRoleType());
+            this.openViduWebRTCService.publishScreenAudio(false);
+            this.openViduWebRTCService.publishWebcamAudio(hasAudio);
+            this.localUsersService.enableWebcamUser();
+        } else {
+            // Handle other cases - ensure webcam session exists
+            if (!this.openViduWebRTCService.isWebcamSessionConnected()) {
+                await this.connectWebcamSession();
+            }
+            if (!this.openViduWebRTCService.hasWebcamPublisher()) {
+                await this.openViduWebRTCService.publishWebcamPublisher(this.ovSettings.getRoleType());
+            }
+            this.localUsersService.enableWebcamUser();
+        }
+        
+        // Enable video publishing
+        this.openViduWebRTCService.publishWebcamVideo(true);
+    }
+}
+```
+
+**Key Changes Made**:
+1. ✅ **Uncommented and fixed the disabling logic**
+2. ✅ **Added proper handling for different connection states**
+3. ✅ **Added `unpublishWebcamPublisher()` call when turning off**
+4. ✅ **Added `disableWebcamUser()` call when turning off**
+5. ✅ **Clear separation between enabling and disabling logic**
+
+**Testing Steps**:
+1. Turn camera ON - verify video appears and camera light turns on
+2. Turn camera OFF - verify video disappears AND camera light turns off
+3. Test with different states: only webcam, only screen, both active
+4. Check browser's camera indicator in the address bar
+
 ## Common Issues and Solutions
 
 ### 1. Web Applications (JavaScript/HTML5)
