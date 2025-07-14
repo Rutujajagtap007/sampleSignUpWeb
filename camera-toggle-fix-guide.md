@@ -100,8 +100,6 @@ async toggleCam() {
             // Handle other cases - ensure webcam session exists
             if (!this.openViduWebRTCService.isWebcamSessionConnected()) {
                 await this.connectWebcamSession();
-            }
-            if (!this.openViduWebRTCService.hasPublisher()) {
                 await this.openViduWebRTCService.publishWebcamPublisher(this.ovSettings.getRoleType());
             }
             this.localUsersService.enableWebcamUser();
