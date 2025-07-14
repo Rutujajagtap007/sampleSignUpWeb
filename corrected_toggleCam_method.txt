@@ -1,0 +1,60 @@
+CORRECTED VERSION - Fixed toggleCam method
+==========================================
+
+Replace your original toggleCam method with this improved version:
+
+async toggleCam(): Promise<void> {
+  const isCurrentlyActive = this.localUsersService.hasWebcamVideoActive();
+  const shouldActivate = !isCurrentlyActive;
+  
+  console.log("Toggling webcam from", isCurrentlyActive, "to", shouldActivate);
+  
+  if (shouldActivate) {
+    await this.enableWebcam();
+  } else {
+    await this.disableWebcam();
+  }
+  
+  // Update the commons service state
+  this.commonsService.toggleCam = shouldActivate;
+}
+
+private async enableWebcam(): Promise<void> {
+  // Ensure webcam session is connected
+  if (!this.openViduWebRTCService.isWebcamSessionConnected()) {
+    await this.connectWebcamSession();
+  }
+  
+  // Handle audio switching if screen sharing is active
+  const hasScreenAudio = this.localUsersService.hasScreenAudioActive();
+  if (this.localUsersService.isOnlyScreenConnected()) {
+    this.openViduWebRTCService.publishScreenAudio(false);
+    this.openViduWebRTCService.publishWebcamAudio(hasScreenAudio);
+  }
+  
+  // Enable webcam
+  await this.openViduWebRTCService.publishWebcamPublisher(this.ovSettings.getRoleType());
+  this.openViduWebRTCService.publishWebcamVideo(true);
+  this.localUsersService.enableWebcamUser();
+}
+
+private async disableWebcam(): Promise<void> {
+  this.openViduWebRTCService.publishWebcamVideo(false);
+  this.localUsersService.disableWebcamUser();
+  this.openViduWebRTCService.unpublishWebcamPublisher();
+}
+
+KEY FIXES MADE:
+===============
+1. ❌ REMOVED: Redundant final publishWebcamVideo() call that was overriding branch logic
+2. ✅ SIMPLIFIED: Clear boolean variables instead of confusing toggle flags  
+3. ✅ SEPARATED: Enable/disable logic into dedicated private methods
+4. ✅ CLEANER: State management with proper sequence
+5. ✅ REDUCED: Excessive console.log statements for production readiness
+
+MAIN PROBLEMS IN ORIGINAL CODE:
+==============================
+- Final publishWebcamVideo(publishVideo) call was redundant and potentially buggy
+- Complex conditional logic that was hard to maintain
+- Mixed concerns in single method
+- Confusing state management with toggleCam variable
